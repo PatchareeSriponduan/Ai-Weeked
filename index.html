@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบแดชบอร์ดเฝ้าระวังทางระบาดวิทยา</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="[https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css](https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css)" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="[https://unpkg.com/leaflet@1.9.4/dist/leaflet.css](https://unpkg.com/leaflet@1.9.4/dist/leaflet.css)" />
+    <!-- Google Fonts -->
+    <link href="[https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap](https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap)" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f4f6f9;
+        }
+        .navbar-custom {
+            background-color: #1e3a8a;
+        }
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .kpi-card {
+            border-left: 5px solid;
+        }
+        .kpi-primary { border-left-color: #2563eb; }
+        .kpi-warning { border-left-color: #f59e0b; }
+        .kpi-danger { border-left-color: #dc2626; }
+        .kpi-success { border-left-color: #10b981; }
+        #map {
+            height: 400px;
+            width: 100%;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark navbar-custom mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                📊 ระบบเฝ้าระวังและวิเคราะห์ข้อมูลทางระบาดวิทยา (Epidemiology Dashboard)
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        <!-- KPI Row -->
+        <div class="row">
+            <div class="col-xl-3 col-md-6">
+                <div class="card kpi-card kpi-primary p-3">
+                    <div class="text-muted small">ผู้ป่วยสะสมทั้งหมด</div>
+                    <div class="h3 fw-bold mb-0" id="totalCases">1,245</div>
+                    <small class="text-danger">↑ 8.2% จากเดือนที่แล้ว</small>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card kpi-card kpi-warning p-3">
+                    <div class="text-muted small">อัตราป่วย (ต่อแสนประชากร)</div>
+                    <div class="h3 fw-bold mb-0">185.4</div>
+                    <small class="text-muted">เกณฑ์เฝ้าระวังระดับปานกลาง</small>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card kpi-card kpi-danger p-3">
+                    <div class="text-muted small">ผู้เสียชีวิต (Fatalities)</div>
+                    <div class="h3 fw-bold mb-0">3</div>
+                    <small class="text-muted">CFR = 0.24%</small>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card kpi-card kpi-success p-3">
+                    <div class="text-muted small">พื้นที่ระบาด Red Zone</div>
+                    <div class="h3 fw-bold mb-0">2 อำเภอ</div>
+                    <small class="text-success">ลดลง 1 อำเภอ</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="row">
+            <!-- Map Column -->
+            <div class="col-lg-7">
+                <div class="card p-3">
+                    <h5 class="card-title fw-bold text-secondary mb-3">📍 แผนที่แสดงการกระจายตัวของผู้ป่วย (Spatial Distribution)</h5>
+                    <div id="map"></div>
+                </div>
+            </div>
+            <!-- Trend Chart Column -->
+            <div class="col-lg-5">
+                <div class="card p-3">
+                    <h5 class="card-title fw-bold text-secondary mb-3">📈 แนวโน้มผู้ป่วยรายเดือน (Monthly Trend)</h5>
+                    <canvas id="trendChart" height="280"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Secondary Content Grid -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card p-3">
+                    <h5 class="card-title fw-bold text-secondary mb-3">👥 จำแนกผู้ป่วยตามกลุ่มอายุ (Age Distribution)</h5>
+                    <canvas id="ageChart" height="200"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card p-3">
+                    <h5 class="card-title fw-bold text-secondary mb-3">📋 ตารางสรุปพื้นที่เฝ้าระวัง</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>พื้นที่/อำเภอ</th>
+                                    <th>ผู้ป่วย (ราย)</th>
+                                    <th>อัตราป่วย</th>
+                                    <th>สถานะ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>อ.เมือง</td>
+                                    <td>540</td>
+                                    <td>210.5</td>
+                                    <td><span class="badge bg-danger">ควบคุมเข้มงวด</span></td>
+                                </tr>
+                                <tr>
+                                    <td>อ.บ้านไผ่</td>
+                                    <td>320</td>
+                                    <td>175.2</td>
+                                    <td><span class="badge bg-warning text-dark">เฝ้าระวัง</span></td>
+                                </tr>
+                                <tr>
+                                    <td>อ.ชุมแพ</td>
+                                    <td>210</td>
+                                    <td>140.0</td>
+                                    <td><span class="badge bg-warning text-dark">เฝ้าระวัง</span></td>
+                                </tr>
+                                <tr>
+                                    <td>อ.น้ำพอง</td>
+                                    <td>175</td>
+                                    <td>95.8</td>
+                                    <td><span class="badge bg-success">ปกติ</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Libraries -->
+    <script src="[https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js](https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js)"></script>
+    <script src="[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)"></script>
+    <script src="[https://unpkg.com/leaflet@1.9.4/dist/leaflet.js](https://unpkg.com/leaflet@1.9.4/dist/leaflet.js)"></script>
+
+    <script>
+        // 1. Initialize Leaflet Map (Centered around Khon Kaen Area)
+        const map = L.map('map').setView([16.4322, 102.8236], 10);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Sample Outbreak Location Data
+        const locations = [
+            { lat: 16.4322, lng: 102.8236, cases: 540, name: "อ.เมือง", status: "High" },
+            { lat: 16.0602, lng: 102.7314, cases: 320, name: "อ.บ้านไผ่", status: "Medium" },
+            { lat: 16.5441, lng: 102.0988, cases: 210, name: "อ.ชุมแพ", status: "Medium" },
+            { lat: 16.7029, lng: 102.8093, cases: 175, name: "อ.น้ำพอง", status: "Low" }
+        ];
+
+        locations.forEach(loc => {
+            const color = loc.status === 'High' ? '#dc2626' : loc.status === 'Medium' ? '#f59e0b' : '#10b981';
+            const circle = L.circleMarker([loc.lat, loc.lng], {
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.6,
+                radius: Math.sqrt(loc.cases) * 1.2
+            }).addTo(map);
+
+            circle.bindPopup(`<b>${loc.name}</b><br>จำนวนผู้ป่วย: ${loc.cases} ราย<br>สถานะ: ${loc.status}`);
+        });
+
+        // 2. Trend Line Chart
+        const ctxTrend = document.getElementById('trendChart').getContext('2d');
+        new Chart(ctxTrend, {
+            type: 'line',
+            data: {
+                labels: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.'],
+                datasets: [{
+                    label: 'จำนวนผู้ป่วย (ราย)',
+                    data: [45, 60, 75, 120, 190, 250, 210, 160, 135],
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // 3. Age Distribution Bar Chart
+        const ctxAge = document.getElementById('ageChart').getContext('2d');
+        new Chart(ctxAge, {
+            type: 'bar',
+            data: {
+                labels: ['0-14 ปี', '15-24 ปี', '25-44 ปี', '45-64 ปี', '65 ปีขึ้นไป'],
+                datasets: [{
+                    label: 'จำนวนผู้ป่วย',
+                    data: [180, 420, 310, 215, 120],
+                    backgroundColor: '#3b82f6'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } }
+            }
+        });
+    </script>
+</body>
+</html>
